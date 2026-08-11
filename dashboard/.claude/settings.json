@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(../topic-0-insecure/**)",
+      "Edit(../topic-0-insecure/**)",
+      "Write(../topic-0-insecure/**)",
+      "Read(../topic-*/**)",
+      "Edit(../topic-*/**)",
+      "Write(../topic-*/**)"
+    ]
+  }
+}
