@@ -2,4 +2,6 @@
 __pycache__/
 *.pyc
 dashboard/data/
+dashboard/logs/spire/agent/data/
+spire/server/data/
 dashboard/logs/

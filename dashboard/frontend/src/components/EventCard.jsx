@@ -10,10 +10,15 @@ export default function EventCard({ event }) {
 
   let description
   try {
-    description = config.description(event.data ?? {})
+    description = config.description(event.data ?? {}, event.stage)
   } catch {
     description = 'Something happened, but this dashboard couldn’t describe it.'
   }
+
+  const warningText =
+    typeof config.warning === 'function'
+      ? config.warning(event.data ?? {}, event.stage)
+      : config.warning
 
   return (
     <div className="animate-fade-slide-in rounded-[var(--radius-control)] bg-white/80 shadow-[var(--shadow-control)] border border-[var(--color-hairline)] px-4 py-3.5">
@@ -42,7 +47,7 @@ export default function EventCard({ event }) {
             {description}
           </p>
 
-          {isWarning && config.warning && (
+          {isWarning && warningText && (
             <div className="mt-2.5 flex items-start gap-1.5 rounded-[10px] bg-[var(--color-warning-soft)] border border-[var(--color-warning-border)] px-3 py-2">
               <AlertTriangle
                 size={13}
@@ -50,7 +55,7 @@ export default function EventCard({ event }) {
                 className="mt-[1px] shrink-0 text-[var(--color-warning)]"
               />
               <p className="text-[12px] leading-snug text-[var(--color-warning)]">
-                {config.warning}
+                {warningText}
               </p>
             </div>
           )}

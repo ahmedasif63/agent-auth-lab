@@ -1,7 +1,12 @@
 import { useState } from 'react'
 import { Play, Loader2, Square } from 'lucide-react'
 
-export default function TaskInput({ onTrigger, onStop, isPending, isLive, runId, error }) {
+const STAGE_LABELS = {
+  'stage-0': 'Stage 0',
+  'stage-1': 'Stage 1',
+}
+
+export default function TaskInput({ onTrigger, onStop, isPending, isLive, runId, error, stage }) {
   const [task, setTask] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [stopping, setStopping] = useState(false)
@@ -15,7 +20,7 @@ export default function TaskInput({ onTrigger, onStop, isPending, isLive, runId,
     if (disabled) return
     setSubmitting(true)
     try {
-      await onTrigger(task.trim())
+      await onTrigger(task.trim(), stage)
       setTask('')
     } catch {
       // surfaced via `error` prop
@@ -38,6 +43,10 @@ export default function TaskInput({ onTrigger, onStop, isPending, isLive, runId,
 
   return (
     <div className="rounded-[var(--radius-card)] bg-white/70 backdrop-blur-xl shadow-[var(--shadow-card)] px-5 py-4">
+      <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-[var(--color-ink-faint)]">
+        Targeting {STAGE_LABELS[stage] ?? stage}
+      </p>
+
       <form onSubmit={handleSubmit} className="flex items-center gap-3">
         <input
           type="text"

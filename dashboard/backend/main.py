@@ -13,6 +13,19 @@ from fastapi import Body, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
+from stage1_docker import (
+    Stage1InfraError,
+    build_stage1_agent_command,
+    ensure_stage1_infra,
+    stop_stage1_container,
+)
+from stage1_status import (
+    DEMO_CURL_COMMAND,
+    get_stage1_server_svid_status,
+    get_trust_domain,
+    test_unauthenticated_connection,
+)
+
 DASHBOARD_DIR = Path(__file__).resolve().parent.parent
 REPO_ROOT = DASHBOARD_DIR.parent
 
@@ -39,9 +52,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# run_id -> {"process": Popen, "log_offset": int}, only for runs this backend
-# process launched and that haven't exited yet. Guards against the /trigger,
-# /stop, and background watcher threads racing on the same entry.
+# run_id -> {"process": Popen, "log_offset": int, "kind": "subprocess" | "docker",
+# "container_name": str | None}, only for runs this backend process launched
+# and that haven't exited yet. Guards against the /trigger, /stop, and
+# background watcher threads racing on the same entry. "kind"/"container_name"
+# only matter to /stop (docker runs are stopped via `docker stop`, not
+# process.terminate()) — watch_process treats both kinds identically since it
+# only cares about process.wait()/returncode either way.
 ACTIVE_RUNS: dict[str, dict[str, Any]] = {}
 ACTIVE_RUNS_LOCK = threading.Lock()
 
@@ -180,21 +197,43 @@ def trigger_run(payload: dict = Body(...)):
     if not isinstance(task, str) or not task.strip():
         raise HTTPException(status_code=400, detail="'task' must be a non-empty string")
 
+    stage = payload.get("stage", "stage-0")
+    if stage not in ("stage-0", "stage-1"):
+        raise HTTPException(status_code=400, detail="'stage' must be 'stage-0' or 'stage-1'")
+
     run_id = str(uuid.uuid4())
 
     TRIGGER_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
     log_file = TRIGGER_LOG_PATH.open("a")
     log_file.write(
-        f"\n--- {datetime.now(timezone.utc).isoformat()} | trigger run_id={run_id} task={task!r} ---\n"
+        f"\n--- {datetime.now(timezone.utc).isoformat()} | trigger stage={stage} "
+        f"run_id={run_id} task={task!r} ---\n"
     )
     log_file.flush()
     log_offset = log_file.tell()  # subprocess output starts here, after our own header
 
-    print(f"[trigger] launching agent.py with run_id={run_id} task={task!r}")
+    if stage == "stage-1":
+        try:
+            ensure_stage1_infra(REPO_ROOT)
+        except Stage1InfraError as exc:
+            log_file.close()
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+        container_name = f"stage1-run-{run_id}"
+        command = build_stage1_agent_command(REPO_ROOT, task, run_id, container_name)
+        cwd = None
+        kind = "docker"
+    else:
+        container_name = None
+        command = [str(AGENT_PYTHON), str(AGENT_SCRIPT), task, run_id]
+        cwd = str(AGENT_SCRIPT.parent)
+        kind = "subprocess"
+
+    print(f"[trigger] launching stage={stage} run_id={run_id} task={task!r}")
 
     process = subprocess.Popen(
-        [str(AGENT_PYTHON), str(AGENT_SCRIPT), task, run_id],
-        cwd=str(AGENT_SCRIPT.parent),
+        command,
+        cwd=cwd,
         stdin=subprocess.DEVNULL,
         stdout=log_file,
         stderr=subprocess.STDOUT,
@@ -202,7 +241,12 @@ def trigger_run(payload: dict = Body(...)):
     log_file.close()
 
     with ACTIVE_RUNS_LOCK:
-        ACTIVE_RUNS[run_id] = {"process": process, "log_offset": log_offset}
+        ACTIVE_RUNS[run_id] = {
+            "process": process,
+            "log_offset": log_offset,
+            "kind": kind,
+            "container_name": container_name,
+        }
 
     threading.Thread(
         target=watch_process, args=(run_id, process, log_offset), daemon=True
@@ -220,17 +264,49 @@ def stop_run(run_id: str):
         raise HTTPException(status_code=404, detail="No active run with this id")
 
     process: subprocess.Popen = entry["process"]
-    process.terminate()
-    try:
-        process.wait(timeout=3)
-    except subprocess.TimeoutExpired:
-        process.kill()
-        process.wait()
+
+    if entry["kind"] == "docker":
+        stop_stage1_container(entry["container_name"])
+        try:
+            process.wait(timeout=8)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
+    else:
+        process.terminate()
+        try:
+            process.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
 
     stage = get_stage_for_run(run_id) or DEFAULT_STAGE
     log_event(run_id, stage, "run_stopped", "system", {"reason": "stopped by user"})
 
     return {"status": "stopped", "run_id": run_id}
+
+
+@app.get("/stage1/status")
+def stage1_status(response: Response):
+    """Live facts about Stage 1's identity infrastructure, derived from the
+    real running containers' own logs — see stage1_status.py."""
+    response.headers["Cache-Control"] = "no-store"
+    return {
+        "trust_domain": get_trust_domain(),
+        "stage1_server": get_stage1_server_svid_status(),
+        # Same string test_unauthenticated_connection() actually executes —
+        # single source of truth in stage1_status.py, so what the terminal
+        # UI types out can never drift from what the backend really sends.
+        "demo_command": DEMO_CURL_COMMAND,
+    }
+
+
+@app.post("/stage1/test-unauthenticated")
+def stage1_test_unauthenticated():
+    """Makes a real TLS connection to the real running stage1-server without
+    a client certificate, and returns the real rejection (or, if somehow
+    unrejected, that too) — never a canned/simulated response."""
+    return test_unauthenticated_connection()
 
 
 @app.get("/stream")

@@ -1,6 +1,11 @@
 import PipelineDiagram from './PipelineDiagram'
+import Stage1View from './Stage1View'
 
-export default function HowItWorksView() {
+export default function HowItWorksView({ stage }) {
+  if (stage === 'stage-1') {
+    return <Stage1View />
+  }
+
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-2xl px-6 py-12">

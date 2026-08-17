@@ -14,18 +14,27 @@
 //     label: 'Short Title Shown At The Top Of The Card',
 //     panel: 'agent' | 'tool_server',   // which column this event renders in
 //     icon: SomeLucideIcon,             // a component imported from 'lucide-react'
-//     description: (data) => `...`,     // plain-language one-liner built from event.data
+//     description: (data, stage) => `...`, // plain-language one-liner from event.data
 //     severity: 'neutral' | 'warning' | 'error',
 //       // 'warning' turns on the security-flag styling (icon + boxed callout)
 //       // 'error'   turns on the same warning-red icon, but WITHOUT the boxed
 //       //           callout — for operational failures (crashed, stopped),
 //       //           kept visually distinct from an actual security finding
-//     warning: 'One-sentence plain-English callout' | undefined, // required if severity is 'warning'
+//     warning: 'One sentence' | (data, stage) => 'One sentence' | undefined,
+//       // required if severity is 'warning'. Use the function form when the
+//       // truth of the claim depends on which stage logged the event (e.g.
+//       // "only a shared password was verified" is true for Stage 0's
+//       // tool_call but false for Stage 1's, which uses real mTLS) — see
+//       // tool_call below for the pattern.
 //   }
 //
-// Rules for `description(data)`:
+// Rules for `description(data, stage)` / function-form `warning`:
 //   - `data` is the event's raw `data` object and may be missing keys — never
 //     assume a field exists, always fall back to something readable.
+//   - `stage` is the event's own `stage` field (e.g. "stage-0", "stage-1") —
+//     only reach for it when the same `type` string means something
+//     different depending on which stage logged it; most types don't need it
+//     and can just ignore the second argument.
 //   - Keep it one sentence, written for someone with zero security background.
 //
 // If an event arrives with a `type` that has no entry here yet, EventCard
@@ -43,6 +52,7 @@ import {
   HelpCircle,
   Square,
   XCircle,
+  RefreshCw,
 } from 'lucide-react'
 
 export const eventTypeConfig = {
@@ -106,8 +116,10 @@ export const eventTypeConfig = {
       return `The tool server ran "${tool}".`
     },
     severity: 'warning',
-    warning:
-      'No check was made on whether this specific action should be allowed. Only a shared password was verified.',
+    warning: (data, stage) =>
+      stage === 'stage-1'
+        ? 'The caller proved its identity over mutual TLS, but nothing yet checks whether this specific action should be allowed for that identity.'
+        : 'No check was made on whether this specific action should be allowed. Only a shared password was verified.',
   },
 
   server_read: {
@@ -151,6 +163,28 @@ export const eventTypeConfig = {
     description: (data) =>
       data?.message || "This run didn't finish. It may have hit a rate limit or an error.",
     severity: 'error',
+  },
+
+  // Stage 1: emitted for stage1-server's background refresh-thread
+  // check-in. Not yet written to the real event log by
+  // topic-1-identity/server.py (it currently only print()s this) — the
+  // dashboard's Stage 1 view synthesizes pseudo-events shaped exactly like
+  // this from the real container's own logs (see backend's
+  // stage1_status.py) so this renders through the same EventCard as
+  // everything else the moment that changes.
+  //
+  // Deliberately says "checked in" rather than "was renewed": there is no
+  // signal available outside topic-1-identity/server.py that tells a real
+  // new SPIRE-issued certificate apart from this thread reloading the same
+  // still-valid one. See stage1_status.py's docstring for how that was
+  // checked directly rather than assumed.
+  svid_refreshed: {
+    label: 'Identity Check-in',
+    panel: 'agent',
+    icon: RefreshCw,
+    description: (data) =>
+      `${data?.workload ?? 'A workload'} checked that its identity certificate is still valid.`,
+    severity: 'neutral',
   },
 }
 

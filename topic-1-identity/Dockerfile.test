@@ -1,0 +1,5 @@
+FROM python:3.12-slim
+WORKDIR /app
+RUN pip install spiffe spiffe-tls
+COPY test_svid_fetch.py .
+CMD ["python", "test_svid_fetch.py"]

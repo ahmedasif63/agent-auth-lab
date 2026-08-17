@@ -12,11 +12,19 @@
 //
 //   {
 //     id: 'unique-kebab-case-id',
+//     stage: 'stage-0',
 //     title: 'Short Step Title',
 //     description: 'One or two plain sentences describing what this step does.',
 //     vulnerabilityNote: 'Plain-language callout of the gap here.' | null,
 //     status: 'solved' | 'vulnerable' | 'planned',
 //   }
+//
+// `stage` records which stage's pipeline this step belongs to. Stage 0's
+// steps live here and PipelineDiagram.jsx renders them as-is, unfiltered —
+// Stage 1 needs a genuinely different diagram shape (an identity issuance
+// chain, a live rotation strip, an interactive mTLS demo), not another
+// linear step list, so it's built from its own components/config
+// (Stage1View.jsx and friends) rather than more entries in this array.
 //
 // status meaning (this drives the visual style, see PipelineStep.jsx):
 //   'solved'     -> this step exists and has a real check in place today (calm/neutral)
@@ -29,6 +37,7 @@
 export const pipelineSteps = [
   {
     id: 'task-input',
+    stage: 'stage-0',
     title: 'Task Input',
     description:
       'A person types a task in plain English and asks the agent to do it. For example: "read this file and tell me what it says."',
@@ -37,6 +46,7 @@ export const pipelineSteps = [
   },
   {
     id: 'agent-decides',
+    stage: 'stage-0',
     title: 'Agent (LLM) Decides An Action',
     description:
       'An AI model reads the task and decides which tool to use, like "read a file" or "send a message", and what to use it for.',
@@ -45,6 +55,7 @@ export const pipelineSteps = [
   },
   {
     id: 'tool-server-checks',
+    stage: 'stage-0',
     title: 'Tool Server Checks API Key Only',
     description:
       'Before running anything, the tool server checks a password sent along with the request.',
@@ -54,6 +65,7 @@ export const pipelineSteps = [
   },
   {
     id: 'action-executes',
+    stage: 'stage-0',
     title: 'Action Executes',
     description:
       'The tool server actually performs the action, like reading the file or sending the message, for real.',
@@ -62,6 +74,7 @@ export const pipelineSteps = [
   },
   {
     id: 'result-logged',
+    stage: 'stage-0',
     title: 'Result Logged',
     description:
       'What happened gets written to the event log. This is exactly what the Live view is reading and showing you.',

@@ -21,11 +21,11 @@ export async function fetchRunEvents(runId) {
   return res.json()
 }
 
-export async function triggerRun(task) {
+export async function triggerRun(task, stage) {
   const res = await fetch(`${BASE_URL}/trigger`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ task }),
+    body: JSON.stringify({ task, stage }),
   })
   if (!res.ok) throw new Error(await parseErrorDetail(res))
   return res.json()
@@ -41,4 +41,16 @@ export async function stopRun(runId) {
 
 export function openEventStream() {
   return new EventSource(`${BASE_URL}/stream`)
+}
+
+export async function fetchStage1Status() {
+  const res = await fetch(`${BASE_URL}/stage1/status`)
+  if (!res.ok) throw new Error(await parseErrorDetail(res))
+  return res.json()
+}
+
+export async function testUnauthenticatedConnection() {
+  const res = await fetch(`${BASE_URL}/stage1/test-unauthenticated`, { method: 'POST' })
+  if (!res.ok) throw new Error(await parseErrorDetail(res))
+  return res.json()
 }

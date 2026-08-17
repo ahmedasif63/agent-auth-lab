@@ -92,11 +92,11 @@ export function useLiveSession({ onRunsChanged } = {}) {
   )
 
   const triggerAndWatch = useCallback(
-    async (task) => {
+    async (task, stage) => {
       setError(null)
       let runId
       try {
-        const result = await triggerRun(task)
+        const result = await triggerRun(task, stage)
         runId = result.run_id
       } catch (err) {
         setError(err.message)
