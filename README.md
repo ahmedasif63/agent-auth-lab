@@ -15,7 +15,7 @@ Agent auth is really four separate questions, each with its own current solution
 
 **stage 0 - baseline (done).** minimal agent with two tools, read a file and send a message, protected by one static api key, no checks on what it can call. gave it a task that only needed reading a file, it also sent an unauthorized message because of an extra instruction slipped into the task. nothing stopped it. notes in `topic-0-insecure/notes.md`.
 
-**stage 1 - authentication.** replace the static key with SPIFFE/SPIRE. each agent gets a short lived identity that rotates on its own instead of one fixed secret. agent and server talk over mutual TLS using that identity.
+**stage 1 - authentication (done).** replaced the static key with SPIFFE/SPIRE. ran a SPIRE server and agent locally, registered the agent as a workload, and gave it a short lived X.509 identity (an SVID) that rotates on its own every few minutes instead of one fixed secret. agent and server now talk over mutual TLS using that identity, both sides present and verify a certificate before any request goes through. deleted the hardcoded key from stage 0 entirely. confirmed a caller with no valid certificate gets rejected at the TLS handshake itself, before any application code even runs. notes in `topic-1-identity/notes.md`.
 
 **stage 2 - delegation.** when an agent acts for a user, exchange the user's token for a scoped agent token that carries both identities. logs can then show the user and the agent separately instead of the agent just acting as the user.
 
@@ -34,4 +34,4 @@ Agent auth is really four separate questions, each with its own current solution
 
 ## status
 
-stage 0 done. stages 1-5 in progress.
+stage 0 and 1 done. stages 2-5 in progress.
